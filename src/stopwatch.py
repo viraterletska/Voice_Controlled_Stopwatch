@@ -6,7 +6,7 @@ from transformers import pipeline
 pipe = pipeline("automatic-speech-recognition", model="openai/whisper-small")
 
 # Parameters for recording
-DURATION = 5  # Duration to record each time (in seconds)
+DURATION = 3  # Duration to record each time (in seconds)
 SAMPLE_RATE = 16000  # Sample rate for the microphone
 
 
@@ -42,21 +42,26 @@ class Stopwatch:
             return time.strftime("%H:%M:%S", time.gmtime(self.elapsed_time))
 
 
+def preprocess_audio(audio_data):
+    """Preprocess audio data without noise reduction."""
+    return audio_data.flatten()
+
+
 def continuous_listening(stopwatch, time_label):
     """Listen continuously for voice commands to control the stopwatch."""
     print("Listening for commands...")
 
     while True:
         try:
-            # Record audio for a specified duration
+            # Record audio for the specified duration
             audio_data = sd.rec(int(DURATION * SAMPLE_RATE), samplerate=SAMPLE_RATE, channels=1, dtype='float32')
             sd.wait()  # Wait until recording is finished
 
-            # Convert the audio data to a format compatible with the Whisper model
-            audio_data = audio_data.flatten()  # Flatten the array to ensure it is 1D
+            # Preprocess the audio
+            processed_audio = preprocess_audio(audio_data)
 
             # Process the audio using the Whisper model
-            result = pipe(audio_data)
+            result = pipe(processed_audio)
             recognized_text = result['text']
             print(f"Recognized: {recognized_text}")
 
