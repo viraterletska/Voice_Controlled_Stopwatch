@@ -1,5 +1,6 @@
 import time
 import sounddevice as sd
+import numpy as np
 from transformers import pipeline
 
 # Load the Whisper model
@@ -8,6 +9,8 @@ pipe = pipeline("automatic-speech-recognition", model="openai/whisper-small")
 # Parameters for recording
 DURATION = 3  # Duration to record each time (in seconds)
 SAMPLE_RATE = 16000  # Sample rate for the microphone
+THRESHOLD = 0.002  # Energy threshold for detecting speech
+WINDOW_SIZE = 0.02  # Window size for energy calculation (in seconds)
 
 
 class Stopwatch:
@@ -42,9 +45,26 @@ class Stopwatch:
             return time.strftime("%H:%M:%S", time.gmtime(self.elapsed_time))
 
 
+def calculate_energy(signal, window_size, sample_rate):
+    """Calculate the energy of the signal in moving windows."""
+    window_length = int(window_size * sample_rate)
+    energy = np.array([np.mean(signal[i:i + window_length] ** 2)
+                       for i in range(0, len(signal) - window_length + 1, window_length)])
+    return energy
+
+
+def is_speech(signal, threshold=THRESHOLD):
+    """Determine if the signal contains speech based on energy."""
+    energy = calculate_energy(signal, WINDOW_SIZE, SAMPLE_RATE)
+    return np.any(energy > threshold)
+
+
 def preprocess_audio(audio_data):
-    """Preprocess audio data without noise reduction."""
-    return audio_data.flatten()
+    """Preprocess audio data by flattening and checking for speech activity."""
+    signal = audio_data.flatten()
+    if is_speech(signal):
+        return signal
+    return None
 
 
 def continuous_listening(stopwatch, time_label):
@@ -59,6 +79,9 @@ def continuous_listening(stopwatch, time_label):
 
             # Preprocess the audio
             processed_audio = preprocess_audio(audio_data)
+            if processed_audio is None:
+                print("No speech detected.")
+                continue
 
             # Process the audio using the Whisper model
             result = pipe(processed_audio)
